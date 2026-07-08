@@ -1,0 +1,30 @@
+# Audio Steganography v2 — Python dependencies
+# Install: pip install -r requirements.txt
+#
+# Core (always required)
+Pillow>=10.0
+numpy>=1.24
+cryptography>=41.0      # AES-256-GCM (crypto.py)
+reedsolo>=1.7           # Reed-Solomon ECC (ecc.py)
+
+# Format support (formats.py — WAV/MP3/FLAC conversion)
+pydub>=0.25
+# pydub also requires ffmpeg on PATH:
+#   macOS  : brew install ffmpeg
+#   Ubuntu : sudo apt install ffmpeg
+#   Windows: https://ffmpeg.org/download.html
+
+# Steganalysis (steganalysis.py — RS Analysis + SPA)
+# No extra deps beyond numpy.
+
+# Carrier selection (choose_best_sound.py)
+librosa>=0.10
+pesq>=0.0.4
+scipy>=1.11
+
+# Visual report (report.py)
+matplotlib>=3.7
+
+# GUI (gui.py)
+# tkinter is included with Python on Windows and macOS.
+# Ubuntu: sudo apt install python3-tk
