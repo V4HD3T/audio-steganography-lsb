@@ -1,6 +1,7 @@
 import wave
 from PIL import Image
 import numpy as np
+import math
 
 
 # Resmi bitlere dönüştürme fonksiyonu
@@ -92,6 +93,20 @@ def get_image_size(image_path):
         return img.size
 
 
+# SNR hesaplama fonksiyonu
+def calculate_snr(original_audio, modified_audio):
+    """
+    İki ses dosyası arasındaki SNR değerini hesaplar.
+    """
+    original_signal = np.frombuffer(original_audio.readframes(-1), dtype=np.int16)
+    modified_signal = np.frombuffer(modified_audio.readframes(-1), dtype=np.int16)
+
+    noise = original_signal - modified_signal
+    snr = 10 * np.log10(np.sum(original_signal ** 2) / np.sum(noise ** 2))
+
+    return snr
+
+
 # Ana program fonksiyonu
 def main():
     """
@@ -124,6 +139,15 @@ def main():
 
     # Çıkarılan bitleri bir resme dönüştür
     bits_to_image(extracted_bits, image_size, extracted_image_path)
+
+    # SNR hesapla
+    with wave.open(audio_input_path, 'rb') as original_audio, wave.open(audio_output_path, 'rb') as modified_audio:
+        snr_value = calculate_snr(original_audio, modified_audio)
+        print(f"SNR Değeri: {snr_value:.2f} dB")
+
+    # ODG ve ENG hesaplamaları için ek yazılımlar veya kütüphaneler kullanılmalıdır.
+    # Örneğin, ITU-R BS.1387 standardına uygun bir yazılım ile ODG hesaplanabilir.
+    # ENG için, gömülen verinin taşıyıcı dosyaya getirdiği gürültü miktarı analiz edilebilir.
 
 
 # Ana programı çalıştır

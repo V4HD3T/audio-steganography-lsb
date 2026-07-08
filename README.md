@@ -1,24 +1,22 @@
-# Audio Steganography — v0.1.0
+# Audio Steganography — v0.2.0
 
-**Initial proof of concept.** Hides an RGB image inside a WAV audio file using basic Least Significant Bit (LSB) substitution.
+**Adds SNR quality measurement.** Same LSB-0 embedding as v0.1.0, with a new metric to quantify how much the embedding degrades the carrier audio.
 
-## Features
+## What's new since v0.1.0
 
-- Convert an image to a flat bit array (R, G, B channels, 8 bits each).
-- Embed each bit into the LSB of a WAV frame byte.
-- Extract bits back and reconstruct the image.
+- `calculate_snr()` — computes the Signal-to-Noise Ratio (dB) between the original and stego audio, giving an objective measure of embedding transparency.
 
-## Limitation
+## Still limited
 
-The extraction step requires the original image dimensions to be known in advance — no size information is stored inside the audio file. The width/height must be hardcoded or passed manually by the caller.
+Image dimensions are still not stored in the stego file — extraction requires knowing the original size in advance. This is fixed in [v0.2.1](../v0.2.1).
 
 ## Usage
 
 ```python
-python steganography.py
+python hide_data.py
 ```
 
-Edit the paths at the bottom of the script before running:
+Edit paths at the bottom of the script:
 
 ```python
 image_path = 'input_image.png'
@@ -27,13 +25,26 @@ audio_output_path = 'output.wav'
 extracted_image_path = 'extracted_image.png'
 ```
 
+Console output includes:
+
+```
+SNR Değeri: 48.32 dB
+```
+
 ## How it works
+
+Identical embedding formula to v0.1.0:
 
 ```
 new_byte = (original_byte & 0xFE) | image_bit
 ```
 
-Each audio sample byte has its least significant bit replaced with one payload bit. The `0xFE` mask clears bit 0 before inserting the new value.
+SNR formula:
+
+```
+SNR (dB) = 10 * log10( Σ(original²) / Σ(noise²) )
+```
+where `noise = original_signal - modified_signal`. Higher SNR means the stego audio is closer to the original — less perceptible distortion.
 
 ## Requirements
 
@@ -43,4 +54,4 @@ pip install Pillow numpy
 
 ## Next version
 
-[v0.2.0](../v0.2.0) removes the manual dimension requirement by embedding a size header directly into the audio file.
+[v0.2.1](../v0.2.1) embeds a 32-bit size header so extraction becomes fully self-contained.
