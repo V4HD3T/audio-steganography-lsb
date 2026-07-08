@@ -1,10 +1,9 @@
 import wave
-from PIL import Image
 import numpy as np
-import math
+from PIL import Image
 
 
-# Resmi bitlere dönüştürme fonksiyonu
+# Resmi bitlere d�n�şt�rme fonksiyonu
 def image_to_bits(image_path):
     with Image.open(image_path) as img:
         img = img.convert('RGB')
@@ -50,11 +49,12 @@ def hide_data_in_audio(audio_path, output_path, image_path):
     data_bits = size_bits + image_bits
 
     num_bits = len(data_bits)
-    if num_bits > len(frame_bytes) * 8:
+    if num_bits > len(frame_bytes) * 4:  # LSB+2
         raise ValueError("Gizlenecek veri ses dosyasının kapasitesini aşıyor")
 
     for i, bit in enumerate(data_bits):
-        frame_bytes[i] = (frame_bytes[i] & 254) | int(bit)
+        # Her byte'ın 2. en az anlamlı bitini (LSB+2) image bit'i ile değiştir
+        frame_bytes[i] = (frame_bytes[i] & 251) | (int(bit) << 2)
 
     frame_modified = bytes(frame_bytes)
     with wave.open(output_path, 'wb') as fd:
@@ -72,7 +72,7 @@ def extract_bits_from_audio(audio_path):
 
     size_bits = []
     for i in range(32):
-        size_bits.append(frame_bytes[i] & 1)
+        size_bits.append((frame_bytes[i] >> 2) & 1)
 
     width_bits = ''.join(map(str, size_bits[:16]))
     height_bits = ''.join(map(str, size_bits[16:]))
@@ -83,7 +83,7 @@ def extract_bits_from_audio(audio_path):
 
     extracted_bits = []
     for i in range(32, 32 + width * height * 3 * 8):
-        extracted_bits.append(frame_bytes[i] & 1)
+        extracted_bits.append((frame_bytes[i] >> 2) & 1)
 
     audio.close()
     return extracted_bits, image_size
@@ -95,9 +95,34 @@ def calculate_snr(original_audio, modified_audio):
     modified_signal = np.frombuffer(modified_audio.readframes(-1), dtype=np.int16)
 
     noise = original_signal - modified_signal
-    snr = 10 * np.log10(np.sum(original_signal ** 2) / np.sum(noise ** 2))
+    noise_power = np.sum(noise ** 2)
+
+    if noise_power == 0:
+        return float('inf')  # Signal and noise are identical, return infinity
+
+    signal_power = np.sum(original_signal ** 2)
+    if signal_power == 0:
+        return float('-inf')  # Signal power is zero, return negative infinity
+
+    snr = 10 * np.log10(signal_power / noise_power)
 
     return snr
+
+
+# ENG hesaplama fonksiyonu
+def calculate_eng(original_audio, modified_audio):
+    original_signal = np.frombuffer(original_audio.readframes(-1), dtype=np.int16)
+    modified_signal = np.frombuffer(modified_audio.readframes(-1), dtype=np.int16)
+
+    original_signal_power = np.sum(original_signal ** 2)
+    noise_power = np.sum((original_signal - modified_signal) ** 2)
+
+    if noise_power == 0:
+        return float('inf')  # Signal and noise are identical, return infinity
+
+    eng = original_signal_power / noise_power
+
+    return eng
 
 
 # Ana program fonksiyonu
@@ -113,7 +138,14 @@ def main():
 
     with wave.open(audio_input_path, 'rb') as original_audio, wave.open(audio_output_path, 'rb') as modified_audio:
         snr_value = calculate_snr(original_audio, modified_audio)
-        print(f"SNR Değeri: {snr_value:.2f} dB")
+        eng_value = calculate_eng(original_audio, modified_audio)
+        if snr_value == float('inf'):
+            print("SNR Değeri: Sonsuz (G�r�lt� Yok)")
+        elif snr_value == float('-inf'):
+            print("SNR Değeri: Tanımsız (Orijinal Sinyal Yok)")
+        else:
+            print(f"SNR Değeri: {snr_value:.2f} dB")
+        print(f"ENG Değeri: {eng_value:.2f}")
 
 
 if __name__ == '__main__':
