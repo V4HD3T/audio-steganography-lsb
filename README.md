@@ -1,14 +1,19 @@
-# Audio Steganography — v0.2.0
+# Audio Steganography — v0.2.1
 
-**Adds SNR quality measurement.** Same LSB-0 embedding as v0.1.0, with a new metric to quantify how much the embedding degrades the carrier audio.
+**Adds a self-contained size header.** Extraction no longer requires knowing the image dimensions in advance — width and height are embedded directly into the stego audio.
 
-## What's new since v0.1.0
+## What's new since v0.2.0
 
-- `calculate_snr()` — computes the Signal-to-Noise Ratio (dB) between the original and stego audio, giving an objective measure of embedding transparency.
+- A 32-bit header (16-bit width + 16-bit height) is prepended to the image bitstream before embedding.
+- `extract_bits_from_audio()` now takes only the audio path — it reads the header first, decodes the dimensions, then extracts exactly the right number of payload bits.
+- `hide_data_in_audio()` now takes the image path directly instead of a pre-computed bit list, since it needs to read the image dimensions itself.
 
-## Still limited
+## Stego layout
 
-Image dimensions are still not stored in the stego file — extraction requires knowing the original size in advance. This is fixed in [v0.2.1](../v0.2.1).
+```
+bytes 0–31   → 32-bit header (16-bit width || 16-bit height), 1 bit per byte (LSB)
+bytes 32+    → image RGB bits, 1 bit per byte (LSB)
+```
 
 ## Usage
 
@@ -25,26 +30,23 @@ audio_output_path = 'output.wav'
 extracted_image_path = 'extracted_image.png'
 ```
 
-Console output includes:
-
-```
-SNR Değeri: 48.32 dB
-```
+No manual size input needed anymore — `extract_bits_from_audio()` returns `(extracted_bits, image_size)` directly.
 
 ## How it works
 
-Identical embedding formula to v0.1.0:
+Embedding formula is unchanged from v0.1.0/v0.2.0 (still LSB-0):
 
 ```
-new_byte = (original_byte & 0xFE) | image_bit
+new_byte = (original_byte & 0xFE) | bit
 ```
 
-SNR formula:
+Header encoding:
 
+```python
+width_bits  = format(width,  '016b')
+height_bits = format(height, '016b')
+size_bits   = list(width_bits + height_bits)   # 32 bits total
 ```
-SNR (dB) = 10 * log10( Σ(original²) / Σ(noise²) )
-```
-where `noise = original_signal - modified_signal`. Higher SNR means the stego audio is closer to the original — less perceptible distortion.
 
 ## Requirements
 
@@ -54,4 +56,4 @@ pip install Pillow numpy
 
 ## Next version
 
-[v0.2.1](../v0.2.1) embeds a 32-bit size header so extraction becomes fully self-contained.
+[v0.2.2](../v0.2.2) moves embedding from bit position 0 to bit position 2 (LSB+2) and adds the ENG metric alongside SNR.

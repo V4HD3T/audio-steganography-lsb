@@ -6,9 +6,6 @@ import math
 
 # Resmi bitlere dönüştürme fonksiyonu
 def image_to_bits(image_path):
-    """
-    Verilen resim dosyasını bitlere dönüştürür.
-    """
     with Image.open(image_path) as img:
         img = img.convert('RGB')
         pixels = np.array(img)
@@ -16,7 +13,6 @@ def image_to_bits(image_path):
         for pixel_row in pixels:
             for pixel in pixel_row:
                 r, g, b = pixel
-                # Her pikselin R, G ve B bileşenlerini 8 bit olarak sakla
                 bits.extend(format(r, '08b'))
                 bits.extend(format(g, '08b'))
                 bits.extend(format(b, '08b'))
@@ -25,9 +21,6 @@ def image_to_bits(image_path):
 
 # Bitlerden resim oluşturma fonksiyonu
 def bits_to_image(bits, image_size, output_path):
-    """
-    Bitleri kullanarak bir resim oluşturur ve kaydeder.
-    """
     bits = ''.join(map(str, bits))
     pixel_values = []
     for i in range(0, len(bits), 8):
@@ -43,19 +36,24 @@ def bits_to_image(bits, image_size, output_path):
 
 
 # Ses dosyasına veri gizleme fonksiyonu
-def hide_data_in_audio(audio_path, output_path, image_bits):
-    """
-    Verilen ses dosyasına bitleri gizler.
-    """
+def hide_data_in_audio(audio_path, output_path, image_path):
     audio = wave.open(audio_path, mode='rb')
     frame_bytes = bytearray(list(audio.readframes(audio.getnframes())))
 
-    num_bits = len(image_bits)
+    image_bits = image_to_bits(image_path)
+    image_size = Image.open(image_path).size
+
+    width_bits = format(image_size[0], '016b')
+    height_bits = format(image_size[1], '016b')
+    size_bits = list(width_bits + height_bits)
+
+    data_bits = size_bits + image_bits
+
+    num_bits = len(data_bits)
     if num_bits > len(frame_bytes) * 8:
         raise ValueError("Gizlenecek veri ses dosyasının kapasitesini aşıyor")
 
-    for i, bit in enumerate(image_bits):
-        # Her byte'ın en az anlamlı bitini (LSB) image bit'i ile değiştir
+    for i, bit in enumerate(data_bits):
         frame_bytes[i] = (frame_bytes[i] & 254) | int(bit)
 
     frame_modified = bytes(frame_bytes)
@@ -68,36 +66,31 @@ def hide_data_in_audio(audio_path, output_path, image_bits):
 
 
 # Ses dosyasından veri çıkarma fonksiyonu
-def extract_bits_from_audio(audio_path, num_bits):
-    """
-    Ses dosyasından bitleri çıkarır.
-    """
+def extract_bits_from_audio(audio_path):
     audio = wave.open(audio_path, mode='rb')
     frame_bytes = bytearray(list(audio.readframes(audio.getnframes())))
 
+    size_bits = []
+    for i in range(32):
+        size_bits.append(frame_bytes[i] & 1)
+
+    width_bits = ''.join(map(str, size_bits[:16]))
+    height_bits = ''.join(map(str, size_bits[16:]))
+
+    width = int(width_bits, 2)
+    height = int(height_bits, 2)
+    image_size = (width, height)
+
     extracted_bits = []
-    for i in range(num_bits):
-        # Her byte'ın en az anlamlı bitini (LSB) oku
+    for i in range(32, 32 + width * height * 3 * 8):
         extracted_bits.append(frame_bytes[i] & 1)
 
     audio.close()
-    return extracted_bits
-
-
-# Resmin boyutlarını belirleme fonksiyonu
-def get_image_size(image_path):
-    """
-    Resmin boyutlarını döndürür.
-    """
-    with Image.open(image_path) as img:
-        return img.size
+    return extracted_bits, image_size
 
 
 # SNR hesaplama fonksiyonu
 def calculate_snr(original_audio, modified_audio):
-    """
-    İki ses dosyası arasındaki SNR değerini hesaplar.
-    """
     original_signal = np.frombuffer(original_audio.readframes(-1), dtype=np.int16)
     modified_signal = np.frombuffer(modified_audio.readframes(-1), dtype=np.int16)
 
@@ -109,47 +102,19 @@ def calculate_snr(original_audio, modified_audio):
 
 # Ana program fonksiyonu
 def main():
-    """
-    Ana program fonksiyonu.
-    """
-    # Resim dosyasının yolunu belirle
     image_path = 'input_image.png'
-
-    # Ses dosyasının yolunu belirle
     audio_input_path = 'input.wav'
     audio_output_path = 'output.wav'
-
-    # Gizli resmin çıkartılacağı yol
     extracted_image_path = 'extracted_image.png'
 
-    # Resmin boyutlarını al
-    image_size = get_image_size(image_path)
-
-    # Resmi bitlere dönüştür
-    image_bits = image_to_bits(image_path)
-
-    # Ses dosyasına veriyi gizle
-    hide_data_in_audio(audio_input_path, audio_output_path, image_bits)
-
-    # Gizlenen bit sayısını belirle
-    num_bits = len(image_bits)
-
-    # Ses dosyasından bitleri çıkar
-    extracted_bits = extract_bits_from_audio(audio_output_path, num_bits)
-
-    # Çıkarılan bitleri bir resme dönüştür
+    hide_data_in_audio(audio_input_path, audio_output_path, image_path)
+    extracted_bits, image_size = extract_bits_from_audio(audio_output_path)
     bits_to_image(extracted_bits, image_size, extracted_image_path)
 
-    # SNR hesapla
     with wave.open(audio_input_path, 'rb') as original_audio, wave.open(audio_output_path, 'rb') as modified_audio:
         snr_value = calculate_snr(original_audio, modified_audio)
         print(f"SNR Değeri: {snr_value:.2f} dB")
 
-    # ODG ve ENG hesaplamaları için ek yazılımlar veya kütüphaneler kullanılmalıdır.
-    # Örneğin, ITU-R BS.1387 standardına uygun bir yazılım ile ODG hesaplanabilir.
-    # ENG için, gömülen verinin taşıyıcı dosyaya getirdiği gürültü miktarı analiz edilebilir.
 
-
-# Ana programı çalıştır
 if __name__ == '__main__':
     main()
